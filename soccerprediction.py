@@ -149,6 +149,7 @@ def updatecompetitiondata(country, comp, startseason, datapath):
     currentdata.to_csv(filename)
     return currentdata
 
+
 def poissonpredict(df, gamedate, historylength):
     # set the amount of simulations to run on each game
     simulatedgames = 100000
@@ -216,32 +217,40 @@ def poissonpredict(df, gamedate, historylength):
 
     return df
 
+
 todaysdate = datetime.date.today().strftime("%Y-%m-%d")
 
 # initialise parser object to read from command line
 parser = argparse.ArgumentParser()
 
+# add our required arguments
 parser.add_argument("-u", "--update", action="store_true", help="Update with latest scores")
 parser.add_argument("-c", "--country", default="England", help="Country to read data for")
 parser.add_argument("-l", "--league", default="Premier League", help="Competition/League to read data for")
 parser.add_argument("-d", "--date", default=todaysdate, help="Date of games to predict YYYY-MM-DD, eg 2017-09-20")
 parser.add_argument("-p", "--path", default="data/", help="Path to store data files, relative to location of this file")
 parser.add_argument("-y", "--history" , default=100, type=int, help="Number of historical games to consider")
+
+# parse the arguments from the command line input and store them in the args variable
 args = parser.parse_args()
 
+# read from the args variable and store in more sensible vars
 country = args.country
 competition = args.league
 gamedate = args.date
 datapath = args.path
 history = args.history
 
+# if update requested then update, otherwise just use the existing data
 if args.update:
     data = updatecompetitiondata(country, competition, 2014, datapath)
 else:
     data = getcompetitiondata(country, competition, 2014, datapath)
 
+# do the prediction - now takes number of historical games to use rather than using everything
 data = poissonpredict(data, gamedate, history)
 
+# save our predictions
 filename = datapath + country + "-" + competition.replace(" ", "-").replace("/", "-") + ".csv"
 data.to_csv(filename)
 
