@@ -226,7 +226,7 @@ parser.add_argument("-c", "--country", default="England", help="Country to read 
 parser.add_argument("-l", "--league", default="Premier League", help="Competition/League to read data for")
 parser.add_argument("-d", "--date", default=todaysdate, help="Date of games to predict YYYY-MM-DD, eg 2017-09-20")
 parser.add_argument("-p", "--path", default="data/", help="Path to store data files, relative to location of this file")
-parser.add_argument("-h", "--history" , default=100, type=int, help="Number of historical games to consider")
+parser.add_argument("-y", "--history" , default=100, type=int, help="Number of historical games to consider")
 args = parser.parse_args()
 
 country = args.country
