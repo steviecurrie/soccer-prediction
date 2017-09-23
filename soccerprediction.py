@@ -150,7 +150,7 @@ def updatecompetitiondata(country, comp, startseason, datapath):
     return currentdata
 
 
-def poissonpredict(df, gamedate, historylength):
+def poissonpredict(df, gamedate, historylength, cutoff=-1):
     # set the amount of simulations to run on each game
     simulatedgames = 100000
 
@@ -208,14 +208,127 @@ def poissonpredict(df, gamedate, historylength):
 
 
         # store our prediction into the dataframe
-        df.ix[i, "homeWinProbability"] = homeTeamWins
-        df.ix[i, "draws"] = draws
-        df.ix[i, "awayTeamWins"] = awayTeamWins
+        df.ix[i, "homeWin"] = homeTeamWins
+        df.ix[i, "draw"] = draws
+        df.ix[i, "awayWin"] = awayTeamWins
         df.ix[i, "totalGoals"] = totalGoals
         df.ix[i, "threeOrMoreGoals"] = threeOrMoreGoals
         df.ix[i, "bothTeamsToScore"] = bothTeamsToScore
 
+        # if probability exceeds our cutoff, print out the game and the expected result
+        if (draws > cutoff or homeTeamWins > cutoff or awayTeamWins > cutoff) and cutoff > 0:
+            if draws > cutoff:
+                result = "Draw"
+                probability = draws
+                odds = 100/draws
+            if homeTeamWins > cutoff:
+                result = ht + " Win"
+                probability = homeTeamWins
+                odds = 100/homeTeamWins
+            if awayTeamWins > cutoff:
+                result = at + " Win"
+                probability = awayTeamWins
+                odds = 100/awayTeamWins
+            print("{0} v {1} : Prediction:{2}, Probability:{3:.2f}, Odds:{4:.2f}".format(ht,at,result,probability,odds))
+
     return df
+
+
+def runtests(data, testdays=30):
+    startdate = datetime.datetime.today() - datetime.timedelta(days=365)
+
+    bestscore = 0
+    besthistory = 0
+    bestcutoff = 0
+    gamespredicted = 0
+
+    for cutoff in range(40,95,5):
+        for history in range(50, 500, 50):
+            correct = 0
+            totalgames = 0
+            possiblegames = 0
+            gamedate = startdate
+            for d in range(testdays):
+                predictdate = gamedate.strftime("%Y-%m-%d")
+                gameindex = data.loc[data["date"] == predictdate].index
+
+                if gameindex.shape[0] > 0:
+                        data = poissonpredict(data, predictdate, history)
+
+                        for i in gameindex:
+                            homescore = data.ix[i]["homeScore"]
+                            awayscore = data.ix[i]["awayScore"]
+                            homewin = data.ix[i]["homeWin"]
+                            draw = data.ix[i]["draw"]
+                            awaywin = data.ix[i]["awayWin"]
+
+                            if homescore == awayscore and draw > homewin and draw > awaywin and draw >= cutoff:
+                                correct += 1
+                            if homescore > awayscore and homewin > draw and homewin > awaywin and homewin >= cutoff:
+                                correct += 1
+                            if awayscore > homescore and awaywin > draw and awaywin > homewin and awaywin >= cutoff:
+                                correct += 1
+                            if draw > cutoff or homewin > cutoff or awaywin > cutoff:
+                                totalgames += 1
+                            possiblegames += 1
+
+                gamedate += datetime.timedelta(days=1)
+
+            if totalgames > 0:
+                score = correct / totalgames * 100
+            else:
+                score = 0
+
+            if (score > bestscore or (score == bestscore and totalgames > gamespredicted)) and totalgames >= possiblegames/10:
+                bestscore = score
+                besthistory = history
+                bestcutoff = cutoff
+                gamespredicted = totalgames
+                print("History:{0} Cutoff:{1:.2f} Score:{2:.2f}%".format(history, cutoff, score))
+                print("{0}/{1} results predicted correctly from {2} possible games".format(correct,totalgames,possiblegames))
+
+    return besthistory, bestcutoff, bestscore
+
+
+def confirmtests(data, history, cutoff, testdays=30):
+    startdate = datetime.datetime.today() - datetime.timedelta(days=365-testdays)
+
+    correct = 0
+    totalgames = 0
+    possiblegames = 0
+    gamedate = startdate
+    for d in range(testdays):
+        predictdate = gamedate.strftime("%Y-%m-%d")
+        gameindex = data.loc[data["date"] == predictdate].index
+
+        if gameindex.shape[0] > 0:
+                data = poissonpredict(data, predictdate, history)
+
+                for i in gameindex:
+                    homescore = data.ix[i]["homeScore"]
+                    awayscore = data.ix[i]["awayScore"]
+                    homewin = data.ix[i]["homeWin"]
+                    draw = data.ix[i]["draw"]
+                    awaywin = data.ix[i]["awayWin"]
+
+                    if homescore == awayscore and draw > homewin and draw > awaywin and draw >= cutoff:
+                        correct += 1
+                    if homescore > awayscore and homewin > draw and homewin > awaywin and homewin >= cutoff:
+                        correct += 1
+                    if awayscore > homescore and awaywin > draw and awaywin > homewin and awaywin >= cutoff:
+                        correct += 1
+                    if draw > cutoff or homewin > cutoff or awaywin > cutoff:
+                        totalgames += 1
+                    possiblegames += 1
+
+        gamedate += datetime.timedelta(days=1)
+
+    if totalgames > 0:
+        score = correct / totalgames * 100
+    else:
+        score = 0
+
+    return score
 
 
 todaysdate = datetime.date.today().strftime("%Y-%m-%d")
@@ -230,6 +343,8 @@ parser.add_argument("-l", "--league", default="Premier League", help="Competitio
 parser.add_argument("-d", "--date", default=todaysdate, help="Date of games to predict YYYY-MM-DD, eg 2017-09-20")
 parser.add_argument("-p", "--path", default="data/", help="Path to store data files, relative to location of this file")
 parser.add_argument("-y", "--history" , default=100, type=int, help="Number of historical games to consider")
+parser.add_argument("-t", "--test", action="store_true", help="Run tests to find best history length and cutoff values")
+parser.add_argument("-b", "--cutoff", default=-1, type=int, help="Cutoff probability for betting")
 
 # parse the arguments from the command line input and store them in the args variable
 args = parser.parse_args()
@@ -240,6 +355,8 @@ competition = args.league
 gamedate = args.date
 datapath = args.path
 history = args.history
+testmode = args.test
+cutoff = args.cutoff
 
 # if update requested then update, otherwise just use the existing data
 if args.update:
@@ -247,11 +364,18 @@ if args.update:
 else:
     data = getcompetitiondata(country, competition, 2014, datapath)
 
-# do the prediction - now takes number of historical games to use rather than using everything
-data = poissonpredict(data, gamedate, history)
+if testmode:
+    besthistory, bestcutoff, bestscore = runtests(data, testdays=60)
+    print("Score of {0:.2f}% with history setting of {1} and cutoff of {2}".format(bestscore, besthistory, bestcutoff))
+    confirmscore = confirmtests(data, besthistory, bestcutoff, testdays=60)
+    print("Validation score of {0:.2f}%".format(confirmscore))
+else:
+    # do the prediction - now takes number of historical games to use rather than using everything
+    # added cutoff option which will printout game predictions with a probability higher than the cutoff
+    data = poissonpredict(data, gamedate, history, cutoff)
 
-# save our predictions
-filename = datapath + country + "-" + competition.replace(" ", "-").replace("/", "-") + ".csv"
-data.to_csv(filename)
+    # save our predictions
+    filename = datapath + country + "-" + competition.replace(" ", "-").replace("/", "-") + ".csv"
+    data.to_csv(filename)
 
 
