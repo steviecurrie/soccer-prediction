@@ -1,15 +1,17 @@
-import pandas as pd
-from bs4 import BeautifulSoup as bs
-from selenium import webdriver
+#!/usr/bin/python3
+import argparse
 import datetime
 from os import path, makedirs
+
 import numpy as np
-import argparse
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup as bs
 
 
 def scrapeseason(country, comp, season):
     # output what the function is attempting to do.
-    print("Scraping:", country, comp, str(season)+"-"+str(season+1))
+    print("Scraping:", country, comp, str(season) + "-" + str(season + 1))
     baseurl = "http://www.soccerpunter.com/soccer-statistics/"
     scrapeaddress = (baseurl + country + "/" + comp.replace(" ", "-").replace("/", "-") + "-"
                      + str(season) + "-" + str(season + 1) + "/results")
@@ -17,9 +19,8 @@ def scrapeseason(country, comp, season):
     print("")
 
     # scrape the page and create beautifulsoup object
-    sess = webdriver.PhantomJS()
-    sess.get(scrapeaddress)
-    page = bs(sess.page_source, "lxml")
+    content = requests.get(scrapeaddress).text
+    page = bs(content, "html.parser")
 
     # find the main data table within the page source
     maintable = page.find("table", "competitionRanking")
@@ -41,7 +42,7 @@ def scrapeseason(country, comp, season):
         except:
             cls = "none"
         if ("titleSpace" not in cls and "compHeading" not in cls and
-                "matchEvents" not in cls and "compSubTitle" not in cls and cls != "none"):
+                    "matchEvents" not in cls and "compSubTitle" not in cls and cls != "none"):
 
             datestr = game.find("a").text
             gamedate = datetime.datetime.strptime(datestr, "%d/%m/%Y").date()
@@ -88,7 +89,6 @@ def scrapeseason(country, comp, season):
 
 
 def getcompetitiondata(country, comp, startseason, datapath):
-
     # make sure our datapath exists
     if not path.exists(datapath):
         makedirs(datapath)
@@ -100,7 +100,7 @@ def getcompetitiondata(country, comp, startseason, datapath):
         currentseason = datetime.date.today().year
 
         # scrape each season
-        for s in range(startseason, currentseason+1):
+        for s in range(startseason, currentseason + 1):
             seasondata.append(scrapeseason(country, competition, s))
 
         # combine our data to one frame
@@ -117,7 +117,6 @@ def getcompetitiondata(country, comp, startseason, datapath):
 
 
 def updatecompetitiondata(country, comp, startseason, datapath):
-
     filename = datapath + country + "-" + comp.replace(" ", "-").replace("/", "-") + ".csv"
     currentseason = datetime.date.today().year
     todaysdate = datetime.date.today().strftime("%Y-%m-%d")
@@ -180,14 +179,14 @@ def poissonpredict(df, gamedate, historylength, cutoff=-1):
         homeTeamHomeAvgAgainst = historical.loc[df["homeTeam"] == ht, "awayScore"].mean()
 
         # divide averages for team by averages for competition to get attack and defence strengths
-        homeTeamAttackStrength = homeTeamHomeAvgFor/homeAvg
-        homeTeamDefenceStrength = homeTeamHomeAvgAgainst/awayAvg
+        homeTeamAttackStrength = homeTeamHomeAvgFor / homeAvg
+        homeTeamDefenceStrength = homeTeamHomeAvgAgainst / awayAvg
 
         # repeat for away team
         awayTeamAwayAvgFor = historical.loc[df["awayTeam"] == at, "awayScore"].mean()
         awayTeamAwayAvgAgainst = historical.loc[df["awayTeam"] == at, "homeScore"].mean()
-        awayTeamAttackStrength = awayTeamAwayAvgFor/awayAvg
-        awayTeamDefenceStrength = awayTeamAwayAvgAgainst/homeAvg
+        awayTeamAttackStrength = awayTeamAwayAvgFor / awayAvg
+        awayTeamDefenceStrength = awayTeamAwayAvgAgainst / homeAvg
 
         # calculated expected goals using attackstrength * defencestrength * average
         homeTeamExpectedGoals = homeTeamAttackStrength * awayTeamDefenceStrength * homeAvg
@@ -206,7 +205,6 @@ def poissonpredict(df, gamedate, historylength, cutoff=-1):
         threeOrMoreGoals = np.sum((homeTeamPoisson + awayTeamPoisson) > 2) / simulatedgames * 100
         bothTeamsToScore = np.sum((homeTeamPoisson > 0) & (awayTeamPoisson > 0)) / simulatedgames * 100
 
-
         # store our prediction into the dataframe
         df.ix[i, "homeWin"] = homeTeamWins
         df.ix[i, "draw"] = draws
@@ -220,16 +218,17 @@ def poissonpredict(df, gamedate, historylength, cutoff=-1):
             if draws > cutoff:
                 result = "Draw"
                 probability = draws
-                odds = 100/draws
-            if homeTeamWins > cutoff:
+                odds = 100 / draws
+            elif homeTeamWins > cutoff:
                 result = ht + " Win"
                 probability = homeTeamWins
-                odds = 100/homeTeamWins
-            if awayTeamWins > cutoff:
+                odds = 100 / homeTeamWins
+            elif awayTeamWins > cutoff:
                 result = at + " Win"
                 probability = awayTeamWins
-                odds = 100/awayTeamWins
-            print("{0} v {1} : Prediction:{2}, Probability:{3:.2f}, Odds:{4:.2f}".format(ht,at,result,probability,odds))
+                odds = 100 / awayTeamWins
+            print("{0} v {1} : Prediction:{2}, Probability:{3:.2f}, Odds:{4:.2f}".format(ht, at, result, probability,
+                                                                                         odds))
 
     return df
 
@@ -242,8 +241,8 @@ def runtests(data, testdays=30):
     bestcutoff = 0
     gamespredicted = 0
 
-    for cutoff in range(40,95,5):
-        for history in range(50, 500, 50):
+    for cutoff in range(40, 95, 5):
+        for history in range(25, 500, 25):
             correct = 0
             totalgames = 0
             possiblegames = 0
@@ -253,24 +252,24 @@ def runtests(data, testdays=30):
                 gameindex = data.loc[data["date"] == predictdate].index
 
                 if gameindex.shape[0] > 0:
-                        data = poissonpredict(data, predictdate, history)
+                    data = poissonpredict(data, predictdate, history)
 
-                        for i in gameindex:
-                            homescore = data.ix[i]["homeScore"]
-                            awayscore = data.ix[i]["awayScore"]
-                            homewin = data.ix[i]["homeWin"]
-                            draw = data.ix[i]["draw"]
-                            awaywin = data.ix[i]["awayWin"]
+                    for i in gameindex:
+                        homescore = data.ix[i]["homeScore"]
+                        awayscore = data.ix[i]["awayScore"]
+                        homewin = data.ix[i]["homeWin"]
+                        draw = data.ix[i]["draw"]
+                        awaywin = data.ix[i]["awayWin"]
 
-                            if homescore == awayscore and draw > homewin and draw > awaywin and draw >= cutoff:
-                                correct += 1
-                            if homescore > awayscore and homewin > draw and homewin > awaywin and homewin >= cutoff:
-                                correct += 1
-                            if awayscore > homescore and awaywin > draw and awaywin > homewin and awaywin >= cutoff:
-                                correct += 1
-                            if draw > cutoff or homewin > cutoff or awaywin > cutoff:
-                                totalgames += 1
-                            possiblegames += 1
+                        if homescore == awayscore and draw > homewin and draw > awaywin and draw >= cutoff:
+                            correct += 1
+                        if homescore > awayscore and homewin > draw and homewin > awaywin and homewin >= cutoff:
+                            correct += 1
+                        if awayscore > homescore and awaywin > draw and awaywin > homewin and awaywin >= cutoff:
+                            correct += 1
+                        if draw > cutoff or homewin > cutoff or awaywin > cutoff:
+                            totalgames += 1
+                        possiblegames += 1
 
                 gamedate += datetime.timedelta(days=1)
 
@@ -279,19 +278,21 @@ def runtests(data, testdays=30):
             else:
                 score = 0
 
-            if (score > bestscore or (score == bestscore and totalgames > gamespredicted)) and totalgames >= possiblegames/10:
+            if (score > bestscore or (
+                            score == bestscore and totalgames > gamespredicted)) and totalgames >= possiblegames / 10:
                 bestscore = score
                 besthistory = history
                 bestcutoff = cutoff
                 gamespredicted = totalgames
                 print("History:{0} Cutoff:{1:.2f} Score:{2:.2f}%".format(history, cutoff, score))
-                print("{0}/{1} results predicted correctly from {2} possible games".format(correct,totalgames,possiblegames))
+                print("{0}/{1} results predicted correctly from {2} possible games".format(correct, totalgames,
+                                                                                           possiblegames))
 
     return besthistory, bestcutoff, bestscore
 
 
 def confirmtests(data, history, cutoff, testdays=30):
-    startdate = datetime.datetime.today() - datetime.timedelta(days=365-testdays)
+    startdate = datetime.datetime.today() - datetime.timedelta(days=365 - testdays)
 
     correct = 0
     totalgames = 0
@@ -302,24 +303,24 @@ def confirmtests(data, history, cutoff, testdays=30):
         gameindex = data.loc[data["date"] == predictdate].index
 
         if gameindex.shape[0] > 0:
-                data = poissonpredict(data, predictdate, history)
+            data = poissonpredict(data, predictdate, history)
 
-                for i in gameindex:
-                    homescore = data.ix[i]["homeScore"]
-                    awayscore = data.ix[i]["awayScore"]
-                    homewin = data.ix[i]["homeWin"]
-                    draw = data.ix[i]["draw"]
-                    awaywin = data.ix[i]["awayWin"]
+            for i in gameindex:
+                homescore = data.ix[i]["homeScore"]
+                awayscore = data.ix[i]["awayScore"]
+                homewin = data.ix[i]["homeWin"]
+                draw = data.ix[i]["draw"]
+                awaywin = data.ix[i]["awayWin"]
 
-                    if homescore == awayscore and draw > homewin and draw > awaywin and draw >= cutoff:
-                        correct += 1
-                    if homescore > awayscore and homewin > draw and homewin > awaywin and homewin >= cutoff:
-                        correct += 1
-                    if awayscore > homescore and awaywin > draw and awaywin > homewin and awaywin >= cutoff:
-                        correct += 1
-                    if draw > cutoff or homewin > cutoff or awaywin > cutoff:
-                        totalgames += 1
-                    possiblegames += 1
+                if homescore == awayscore and draw > homewin and draw > awaywin and draw >= cutoff:
+                    correct += 1
+                if homescore > awayscore and homewin > draw and homewin > awaywin and homewin >= cutoff:
+                    correct += 1
+                if awayscore > homescore and awaywin > draw and awaywin > homewin and awaywin >= cutoff:
+                    correct += 1
+                if draw > cutoff or homewin > cutoff or awaywin > cutoff:
+                    totalgames += 1
+                possiblegames += 1
 
         gamedate += datetime.timedelta(days=1)
 
@@ -342,7 +343,7 @@ parser.add_argument("-c", "--country", default="England", help="Country to read 
 parser.add_argument("-l", "--league", default="Premier League", help="Competition/League to read data for")
 parser.add_argument("-d", "--date", default=todaysdate, help="Date of games to predict YYYY-MM-DD, eg 2017-09-20")
 parser.add_argument("-p", "--path", default="data/", help="Path to store data files, relative to location of this file")
-parser.add_argument("-y", "--history" , default=100, type=int, help="Number of historical games to consider")
+parser.add_argument("-y", "--history", default=100, type=int, help="Number of historical games to consider")
 parser.add_argument("-t", "--test", action="store_true", help="Run tests to find best history length and cutoff values")
 parser.add_argument("-b", "--cutoff", default=-1, type=int, help="Cutoff probability for betting")
 
@@ -377,5 +378,3 @@ else:
     # save our predictions
     filename = datapath + country + "-" + competition.replace(" ", "-").replace("/", "-") + ".csv"
     data.to_csv(filename)
-
-
