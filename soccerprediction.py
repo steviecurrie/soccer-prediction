@@ -372,7 +372,7 @@ if testmode:
     print("Validation score of {0:.2f}%".format(confirmscore))
 
     print("If the above scores seem acceptable, you should use these options")
-    print("soccerprediction.py -c {0} -l {1} -y {2} -b {3}".format(country, competition, besthistory, bestcutoff))
+    print("soccerprediction.py -c \"{0}\" -l \"{1}\" -y {2} -b {3}".format(country, competition, besthistory, bestcutoff))
     print("\nGood Luck!")
 
 else:
