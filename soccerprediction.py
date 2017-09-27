@@ -370,6 +370,11 @@ if testmode:
     print("Score of {0:.2f}% with history setting of {1} and cutoff of {2}".format(bestscore, besthistory, bestcutoff))
     confirmscore = confirmtests(data, besthistory, bestcutoff, testdays=60)
     print("Validation score of {0:.2f}%".format(confirmscore))
+
+    print("If the above scores seem acceptable, you should use these options")
+    print("soccerprediction.py -c {0} -l {1} -y {2} -b {3}".format(country, competition, besthistory, bestcutoff))
+    print("\nGood Luck!")
+
 else:
     # do the prediction - now takes number of historical games to use rather than using everything
     # added cutoff option which will printout game predictions with a probability higher than the cutoff
