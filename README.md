@@ -24,7 +24,9 @@ pip install pandas
 pip install requests
 pip install beautifulsoup4
 ```
-
+```
+or pip install -r requirments.txt
+```
 then run
 ```
 python soccerprediction.py -t
